@@ -1,5 +1,10 @@
-library(datasets)
-view(mtcars)
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+
+View(mtcars)
 x <-1
 print(x)
 msg<-'Hello'
