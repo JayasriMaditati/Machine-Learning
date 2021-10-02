@@ -1,0 +1,235 @@
+---
+title: "Assignment_ML2"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+chooseCRANmirror(graphics = getOption("menu.graphics"), ind = 79,
+                 local.only = FALSE)
+install.packages("caret")
+install.packages("ISLR")
+install.packages("class")
+library(class)
+library(caret)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+## KNN Algorithm {.tabset}
+### Data Exploration
+```{r}
+# Importing the file
+Universal_data<- read.csv("UniversalBank.csv")
+
+#Eliminating variables [ID & Zipcode] from the dataset.
+
+Universal_new_data <- Universal_data[c(-1,-5)]
+
+#Converting Categorical variables into dummy Variables
+
+dummy_family <- dummyVars(~Family, data = Universal_new_data)
+head(predict(dummy_family,Universal_new_data))
+
+dummy_Education <- dummyVars(~Education,data = Universal_new_data)
+head(predict(dummy_Education,Universal_new_data))
+
+
+```
+
+### Data Partitioning
+
+```{r}
+# Splitting the data into training(60%) and validation(40%)
+
+set.seed(123)
+train_index <- createDataPartition(Universal_new_data$Personal.Loan,p=0.6,list = FALSE)
+train_data <- Universal_new_data[train_index,] #3000 Observations
+validation_data <- Universal_new_data[-train_index,] #2000 Observations
+
+```
+### Generating Test Data
+
+```{r}
+test_data<-data.frame(Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education = 2, Mortgage = 0, Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 1) 
+```
+### Data Normalization
+```{r}
+# Copy the original data
+train.norm.df <- train_data
+valid.norm.df <- validation_data
+test.norm.df <- test_data
+traval.norm.df <- Universal_new_data #(Training + Validation data)
+
+#Use preProcess() function to normalize numerical columns from the dataset
+
+Values_z_normalised <- preProcess(train_data[,c(1:3,5,7)],method = c("center","scale"))
+
+#Applying the normalised model on the training and validation data
+
+train.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised,train_data[,c(1:3,5,7)]) 
+valid.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised,validation_data[,c(1:3,5,7)])
+#traval.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised,Universal_new_data[,c(1:3,5,7)])
+#test.norm.df <- predict(Values_z_normalised, test_data)
+
+#summary(train.norm.df)
+#var(train.norm.df[, c(1:3,5,7)])
+#summary(valid.norm.df)
+#var(valid.norm.df[, c(1:3,5,7)])
+
+```
+### Modeling k-NN
+```{r}
+set.seed(123)
+
+Model.k.1<- knn(train=train.norm.df[,c(1:3,5,7)],test=valid.norm.df[,c(1:3,5,7)],cl= train.norm.df[,8],k=1,prob= TRUE)
+
+actual=valid.norm.df[,8]
+Prediction_prob =attr(Model.k.1,"prob")
+
+
+table(Model.k.1, actual)
+mean(Model.k.1 == actual)
+
+
+#row.names(train_data)[attr(Model.k.1, "Model.k.1.index")]
+
+
+```
+### Classifying the customer using the k=1 [ Performing KNN classification  on test data]
+```{r}
+# Renormalizing the (training+validation) data 
+set.seed(123)
+Values_z_normalised2 <- preProcess(traval.norm.df[,c(1:3,5,7)], method = c("center","scale"))
+
+traval.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised2,Universal_new_data[,c(1:3,5,7)])
+test.norm.df<- predict(Values_z_normalised2,test_data[,c(1:3,5,7)])
+
+
+Prediction_test <- knn(train= traval.norm.df[,c(1:3,5,7)],test=test.norm.df,cl=traval.norm.df[,8],k=1,prob=TRUE)
+
+head(Prediction_test) 
+
+Prediction_test_prob<-attr(Prediction_test,"prob")
+
+Prediction_test_prob
+```
+### Generating loop to find best k
+```{r}
+
+#To determine k, we use the performance on the validation set.Here, we will vary the value of k from 1 to 14
+# initialize a data frame with two columns: k, and accuracy.
+
+library(caret)
+set.seed(123)
+accuracy.df <- data.frame(k = seq(1, 15, 1), accuracy = rep(0, 15))
+
+# compute knn for different k on validation.
+for(i in 1:15) {
+  knn.pred <- knn(train.norm.df[,c(1:3,5,7)], valid.norm.df[,c(1:3,5,7)], 
+                  cl = train.norm.df[, 8], k = i,prob=TRUE)
+  accuracy.df[i, 2] <- mean(knn.pred==actual) 
+}
+accuracy.df
+
+```
+### RePartitioning the data
+```{r}
+## Data Splitting (50% Training Data and 30% for validation data and 20% test data)
+set.seed(123)
+test_index1 <- createDataPartition(Universal_new_data$Personal.Loan,p=0.2,list = FALSE)
+Test_Data2 <- Universal_new_data[test_index1,]# 1000 Rows (Test data)
+train_vali_data <- Universal_new_data[-test_index1,]
+
+train_index2 <- createDataPartition(train_vali_data$Personal.Loan,p=0.625,list = FALSE)
+train_data2 <- train_vali_data[train_index2,] #2500 Rows (Training data)
+validation_data2 <- train_vali_data[-train_index2,]#1500 Rows (validation data)
+
+ NROW(Test_Data2)
+ NROW(train_data2)
+ NROW(validation_data2)
+ # Data Normalization
+ 
+# Copy the original data
+train.norm.df2 <- train_data2
+valid.norm.df2 <- validation_data2
+train_vali.norm.df <- train_vali_data
+test.norm.df2 <-Test_Data2
+
+#Use preProcess() function to normalize numerical columns from the Universal_new_data dataset
+
+Values_z_normalised_repartition <- preProcess(train_data2[,c(1:3,5,7)],method = c("center","scale"))
+
+
+train.norm.df2[,c(1:3,5,7)] <- predict(Values_z_normalised_repartition,train_data2[,c(1:3,5,7)])
+valid.norm.df2[,c(1:3,5,7)] <- predict(Values_z_normalised_repartition,validation_data2[,c(1:3,5,7)])
+train_vali.norm.df[,c(1:3,5,7)] <- predict(Values_z_normalised2,train_vali_data[,c(1:3,5,7)])
+test.norm.df2[,c(1:3,5,7)] <-predict(Values_z_normalised_repartition,Test_Data2[,c(1:3,5,7)])
+
+
+#summary(train.norm.df2)
+var(train.norm.df2[, c(1:3,5,7)])
+summary(valid.norm.df2)
+var(valid.norm.df2[, c(1:3,5,7)])
+
+## Modeling k-NN
+
+set.seed(123)
+ModelNew.k.1<- knn(train.norm.df2[,c(1:3,5,7)],valid.norm.df2[,c(1:3,5,7)],cl= train.norm.df2[,8],k=1,prob= TRUE)
+#print(ModelNew.k.1)
+head(ModelNew.k.1) 
+actual= valid.norm.df2[,8]
+#row.names(train_data)[attr(Model.k.1, "Model.k.1.index")]
+mean(ModelNew.k.1==actual)
+
+class_prob = attr(ModelNew.k.1,"prob")
+head(class_prob)
+
+
+# Prediction for the test data
+Values_z_normalised3<- preProcess(train_vali_data[,c(1:3,5,7)], method = c("center","scale"))
+
+train_vali.norm.df[,c(1:3,5,7)] <- predict(Values_z_normalised3,train_vali_data[,c(1:3,5,7)])
+test.norm.df2[,c(1:3,5,7)]<- predict(Values_z_normalised3,Test_Data2[,c(1:3,5,7)])
+
+
+Model_new3<- knn(train_vali.norm.df[,c(1:3,5,7)],test.norm.df2[,c(1:3,5,7)],cl=train_vali.norm.df[,8],k=1)
+#print(Model_new3)
+
+head(Model_new3)
+actual= test.norm.df2[,8]
+mean(Model_new3==actual)
+
+set.seed(123)
+accuracy.df <- data.frame(k = seq(1, 15, 1), accuracy = rep(0, 15))
+
+for(i in 1:15) {
+  knn.pred <- knn(train_vali.norm.df[,c(1:3,5,7)], test.norm.df2[,c(1:3,5,7)], 
+                  cl = train_vali.norm.df[, 8], k = i,prob=TRUE)
+  accuracy.df[i, 2] <- mean(knn.pred==actual) 
+}
+accuracy.df
+```
+
+
+### Including Confusion Matrix
+
+You can also embed plots, for example:
+
+```{r}
+
+confusionMatrix(ModelNew.k.1,as.factor(valid.norm.df2[,8]),positive = '1')
+confusionMatrix(Model_new3,as.factor(test.norm.df2[,8]),positive = '1')
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
