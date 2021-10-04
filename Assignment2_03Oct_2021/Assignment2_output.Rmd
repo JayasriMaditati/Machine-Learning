@@ -24,29 +24,41 @@ This is an R Markdown document. Markdown is a simple formatting syntax for autho
 
 When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
 
-## KNN Algorithm {.tabset}
+
+# KNN Algorithm {.tabset .tabset-pills}
+
+## 1.Classification of customer using K=1  {.tabset}
+
 ### Data Exploration
+* Imported data from UniversalBank CSV file.
+* Eliminated ID,ZIPCODE Variables from the Dataset.
+* Convert Education column into Dummy Variables (Education_1,Education2,Education3) and added these dummy variabes to the dataset and  dropped the original education variable.
 ```{r}
 # Importing the file
 Universal_data<- read.csv("UniversalBank.csv")
 
 #Eliminating variables [ID & Zipcode] from the dataset.
 
-Universal_new_data <- Universal_data[c(-1,-5)]
+Universal_sub_data <- Universal_data[c(-1,-5)]
 
-#Converting Categorical variables into dummy Variables
 
-dummy_family <- dummyVars(~Family, data = Universal_new_data)
-head(predict(dummy_family,Universal_new_data))
+#Converting Education Categorical variables into dummy Variables
+library(psych)
+dummy_Education <- as.data.frame(dummy.code(Universal_sub_data$Education))
+names(dummy_Education) <- c("Education_1", "Education_2","Education_3") 
 
-dummy_Education <- dummyVars(~Education,data = Universal_new_data)
-head(predict(dummy_Education,Universal_new_data))
+#Eliminating Education variable from Dataset
 
+Universal_new_data_without_Education = subset(Universal_sub_data,select = - c(Education))
+Universal_new_data <- cbind(Universal_new_data_without_Education,dummy_Education)
+
+
+Universal_new_data$Personal.Loan <- as.factor(Universal_new_data$Personal.Loan)
+Universal_new_data$CCAvg <- as.integer(Universal_new_data$CCAvg)
 
 ```
-
 ### Data Partitioning
-
+* Data is split-ted into training(60%)[3000] and validation(40%)[2000] data
 ```{r}
 # Splitting the data into training(60%) and validation(40%)
 
@@ -54,14 +66,16 @@ set.seed(123)
 train_index <- createDataPartition(Universal_new_data$Personal.Loan,p=0.6,list = FALSE)
 train_data <- Universal_new_data[train_index,] #3000 Observations
 validation_data <- Universal_new_data[-train_index,] #2000 Observations
-
 ```
-### Generating Test Data
-
+### Generating the Test Data
+* Created a dataframe for the given test data in the question1
 ```{r}
-test_data<-data.frame(Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education = 2, Mortgage = 0, Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 1) 
+test_data<-data.frame(Age = 40, Experience = 10, Income = 84, Family = 2, CCAvg = 2, Education_1 = 0, Education_2 = 1, Education_3 = 0, Mortgage = 0, Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 1,stringsAsFactors = FALSE) 
+test_data
 ```
 ### Data Normalization
+* Normalize the training data using preProcess function.
+* Apply the normalized model on the training, validation data and test data using Predict Function.
 ```{r}
 # Copy the original data
 train.norm.df <- train_data
@@ -71,50 +85,53 @@ traval.norm.df <- Universal_new_data #(Training + Validation data)
 
 #Use preProcess() function to normalize numerical columns from the dataset
 
-Values_z_normalised <- preProcess(train_data[,c(1:3,5,7)],method = c("center","scale"))
+Values_z_normalised <- preProcess(train_data[,-7],method = c("center","scale"))
 
-#Applying the normalised model on the training and validation data
+#Applying the normalized model on the training, validation and test data
 
-train.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised,train_data[,c(1:3,5,7)]) 
-valid.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised,validation_data[,c(1:3,5,7)])
-#traval.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised,Universal_new_data[,c(1:3,5,7)])
-#test.norm.df <- predict(Values_z_normalised, test_data)
+train.norm.df[,-7] <-  predict(Values_z_normalised,train_data[,-7]) 
+valid.norm.df[,-7] <-  predict(Values_z_normalised,validation_data[,-7])
+traval.norm.df[,-7] <-  predict(Values_z_normalised,Universal_new_data[,-7])
+test.norm.df <- predict(Values_z_normalised, test_data)
 
 #summary(train.norm.df)
-#var(train.norm.df[, c(1:3,5,7)])
+#var(train.norm.df[,-7])
 #summary(valid.norm.df)
-#var(valid.norm.df[, c(1:3,5,7)])
-
+#var(valid.norm.df[,-7])
 ```
 ### Modeling k-NN
+* Performing Knn() function on training and validation using K=1.
+* Calculating for Prediction probability and mean.
+* Created a table for the the actual(Personal.loan) and predicted model(Model.k.1).
 ```{r}
 set.seed(123)
 
-Model.k.1<- knn(train=train.norm.df[,c(1:3,5,7)],test=valid.norm.df[,c(1:3,5,7)],cl= train.norm.df[,8],k=1,prob= TRUE)
+Model.k.1<- knn(train=train.norm.df[,-7],test=valid.norm.df[,-7],cl= train.norm.df[,7],k=1,prob= TRUE)
 
-actual=valid.norm.df[,8]
+actual=valid.norm.df[,7]
 Prediction_prob =attr(Model.k.1,"prob")
+head(Prediction_prob)
 
 
 table(Model.k.1, actual)
 mean(Model.k.1 == actual)
 
-
-#row.names(train_data)[attr(Model.k.1, "Model.k.1.index")]
-
-
 ```
+
 ### Classifying the customer using the k=1 [ Performing KNN classification  on test data]
+* Before predicting the data, combined the training and validation data and renormalised the data and apply it on test data
+* The knn model using k=1 predicted that the test data will be classified as '0' with probability '1'(Loan will be denied)
 ```{r}
+
 # Renormalizing the (training+validation) data 
 set.seed(123)
-Values_z_normalised2 <- preProcess(traval.norm.df[,c(1:3,5,7)], method = c("center","scale"))
+Values_z_normalised2 <- preProcess(traval.norm.df[,-7], method = c("center","scale"))
 
-traval.norm.df[,c(1:3,5,7)] <-  predict(Values_z_normalised2,Universal_new_data[,c(1:3,5,7)])
-test.norm.df<- predict(Values_z_normalised2,test_data[,c(1:3,5,7)])
+traval.norm.df[,-7] <-  predict(Values_z_normalised2,Universal_new_data[,-7])
+test.norm.df<- predict(Values_z_normalised2,test_data)
 
 
-Prediction_test <- knn(train= traval.norm.df[,c(1:3,5,7)],test=test.norm.df,cl=traval.norm.df[,8],k=1,prob=TRUE)
+Prediction_test <- knn(train= traval.norm.df[,-7],test=test.norm.df,cl=traval.norm.df[,7],k=1,prob=TRUE)
 
 head(Prediction_test) 
 
@@ -122,29 +139,69 @@ Prediction_test_prob<-attr(Prediction_test,"prob")
 
 Prediction_test_prob
 ```
-### Generating loop to find best k
+###  { .tabset .tabset-pills}
+## 2.Choice of the best K that balances between overfitting and ignorning the predictor information
+
+* To determine k, we use the performance on the validation set.Here, we will vary the value of k from 1 to 15.
+* initialize a data frame with two columns: k, and accuracy.
+* Computed knn for different K on validation and plotted a graph for K and corresponding accuracy.
+* The best choice of K which also balances the model from over fitting is k=3 with accuracy(96.30%).
 ```{r}
-
-#To determine k, we use the performance on the validation set.Here, we will vary the value of k from 1 to 14
-# initialize a data frame with two columns: k, and accuracy.
-
 library(caret)
 set.seed(123)
 accuracy.df <- data.frame(k = seq(1, 15, 1), accuracy = rep(0, 15))
 
 # compute knn for different k on validation.
 for(i in 1:15) {
-  knn.pred <- knn(train.norm.df[,c(1:3,5,7)], valid.norm.df[,c(1:3,5,7)], 
-                  cl = train.norm.df[, 8], k = i,prob=TRUE)
-  accuracy.df[i, 2] <- mean(knn.pred==actual) 
+  knn.pred <- knn(train.norm.df[,-7], valid.norm.df[,-7], 
+                  cl = train.norm.df[, 7], k = i)
+  accuracy.df[i, 2] <- confusionMatrix(knn.pred,valid.norm.df[,7])$overall[1]
 }
 accuracy.df
+plot(accuracy.df,type="o")
 
 ```
-### RePartitioning the data
+
+###  { .tabset .tabset-pills}
+## 3.Confusion matrix for the validation results using best K 
+* From above question it is inferred that k=3 is the best choice of k.
+* performing knn function on the validation data using the best k=3.
+* computed confusion matrix with highest sensitivity and moderate specificity.
+```{r}
+Model.k.3 <- knn(train.norm.df[,-7], valid.norm.df[,-7], 
+                  cl = train.norm.df[,7], k = 3,prob = TRUE)
+confusionMatrix(Model.k.3,valid.norm.df[,7])
+
+```
+###  { .tabset .tabset-pills}
+## 4.Classifying the customer using the best K 
+* Performed KNN model on the test data from question one using the best k value ( k=3).
+* The knn model using k=1 predicted that the test data will be classified as '1' (Loan will be accepted).
+```{r}
+Model.Best.k <-knn(train=train.norm.df[,-7],test=test_data,cl=train.norm.df[,7],k=3,prob=TRUE)
+head(Model.Best.k)
+```
+###  { .tabset .tabset-pills}
+## 5.RePartitioning the data 
+* Splitted data into Training data(50%),Validation Data(30%) and test data(20%)
+* Normalize the training data using preProcess function 
+* Apply the normalized model on the training, validation data and test data using Predict Function
+* Performing Knn() function on training and validation using K=3
+* Calculating for Prediction probability and mean
+* Created a table for the the actual(Personal.loan) and predicted model(Model.k.1)
+
+
+Accuracy of the Knn models for traning,validation and test datasets for k=3
+Train_Knn= 97.6% (I tried to understand on how model reacts to the same data it got trained.)
+Valid_Knn = 95.2%
+test_knn = 96.9%
+It is known that the larger the model , more unlikely it will overfit. 
+The model performed better in the test data set as it got enough data to learn from ie, 80% of the data(Training and validation), whereas validation model learned from 50% of the training data.More the data ,better the accuracy.
+
 ```{r}
 ## Data Splitting (50% Training Data and 30% for validation data and 20% test data)
 set.seed(123)
+str(Universal_new_data)
 test_index1 <- createDataPartition(Universal_new_data$Personal.Loan,p=0.2,list = FALSE)
 Test_Data2 <- Universal_new_data[test_index1,]# 1000 Rows (Test data)
 train_vali_data <- Universal_new_data[-test_index1,]
@@ -166,69 +223,65 @@ test.norm.df2 <-Test_Data2
 
 #Use preProcess() function to normalize numerical columns from the Universal_new_data dataset
 
-Values_z_normalised_repartition <- preProcess(train_data2[,c(1:3,5,7)],method = c("center","scale"))
+Values_z_normalised_repartition <- preProcess(train_data2[,-7],method = c("center","scale"))
 
 
-train.norm.df2[,c(1:3,5,7)] <- predict(Values_z_normalised_repartition,train_data2[,c(1:3,5,7)])
-valid.norm.df2[,c(1:3,5,7)] <- predict(Values_z_normalised_repartition,validation_data2[,c(1:3,5,7)])
-train_vali.norm.df[,c(1:3,5,7)] <- predict(Values_z_normalised2,train_vali_data[,c(1:3,5,7)])
-test.norm.df2[,c(1:3,5,7)] <-predict(Values_z_normalised_repartition,Test_Data2[,c(1:3,5,7)])
+train.norm.df2[,-7] <- predict(Values_z_normalised_repartition,train_data2[,-7])
+valid.norm.df2[,-7] <- predict(Values_z_normalised_repartition,validation_data2[,-7])
+train_vali.norm.df[,-7] <- predict(Values_z_normalised2,train_vali_data[,-7])
+test.norm.df2[,-7] <-predict(Values_z_normalised_repartition,Test_Data2[,-7])
 
 
 #summary(train.norm.df2)
-var(train.norm.df2[, c(1:3,5,7)])
-summary(valid.norm.df2)
-var(valid.norm.df2[, c(1:3,5,7)])
+#var(train.norm.df2[, c(1:3,5,7)])
+#summary(valid.norm.df2)
+#var(valid.norm.df2[, c(1:3,5,7)])
 
-## Modeling k-NN
+## Modeling k-NN for validation data
 
 set.seed(123)
-ModelNew.k.1<- knn(train.norm.df2[,c(1:3,5,7)],valid.norm.df2[,c(1:3,5,7)],cl= train.norm.df2[,8],k=1,prob= TRUE)
+train_knn_3<- knn(train.norm.df2[,-7],train.norm.df2[,-7],cl=train.norm.df2[,7],k=3,prob=TRUE)
+valid_knn_3<- knn(train.norm.df2[,-7],valid.norm.df2[,-7],cl= train.norm.df2[,7],k=3,prob= TRUE)
 #print(ModelNew.k.1)
-head(ModelNew.k.1) 
-actual= valid.norm.df2[,8]
-#row.names(train_data)[attr(Model.k.1, "Model.k.1.index")]
-mean(ModelNew.k.1==actual)
+head(train_knn_3)
+head(valid_knn_3) 
+actual= valid.norm.df2[,7]
+mean(valid_knn_3==actual)
 
-class_prob = attr(ModelNew.k.1,"prob")
+class_prob = attr(valid_knn_3,"prob")
 head(class_prob)
 
 
-# Prediction for the test data
-Values_z_normalised3<- preProcess(train_vali_data[,c(1:3,5,7)], method = c("center","scale"))
+# Knn for test data
 
-train_vali.norm.df[,c(1:3,5,7)] <- predict(Values_z_normalised3,train_vali_data[,c(1:3,5,7)])
-test.norm.df2[,c(1:3,5,7)]<- predict(Values_z_normalised3,Test_Data2[,c(1:3,5,7)])
+Values_z_normalised3<- preProcess(train_vali_data[,-7], method = c("center","scale"))
+
+train_vali.norm.df[,-7] <- predict(Values_z_normalised3,train_vali_data[,-7])
+test.norm.df2[,-7]<- predict(Values_z_normalised3,Test_Data2[,-7])
 
 
-Model_new3<- knn(train_vali.norm.df[,c(1:3,5,7)],test.norm.df2[,c(1:3,5,7)],cl=train_vali.norm.df[,8],k=1)
+test_knn_3<- knn(train_vali.norm.df[,-7],test.norm.df2[,-7],cl=train_vali.norm.df[,7],k=3)
 #print(Model_new3)
 
-head(Model_new3)
-actual= test.norm.df2[,8]
-mean(Model_new3==actual)
+head(test_knn_3)
+actual= test.norm.df2[,7]
+mean(test_knn_3==actual)
 
-set.seed(123)
-accuracy.df <- data.frame(k = seq(1, 15, 1), accuracy = rep(0, 15))
-
-for(i in 1:15) {
-  knn.pred <- knn(train_vali.norm.df[,c(1:3,5,7)], test.norm.df2[,c(1:3,5,7)], 
-                  cl = train_vali.norm.df[, 8], k = i,prob=TRUE)
-  accuracy.df[i, 2] <- mean(knn.pred==actual) 
-}
-accuracy.df
 ```
 
-
 ### Including Confusion Matrix
-
-You can also embed plots, for example:
+Accuracy of the Knn models for traning,validation and test datasets for k=3
+Train_Knn= 97.6% (I tried to understand on how model reacts to the same data it got trained.)
+Valid_Knn = 95.2%
+test_knn = 96.9%
+It is known that the larger the model , more unlikely it will overfit. 
+The model performed better in the test data set as it got enough data to learn from ie, 80% of the data(Training and validation), whereas validation model learned from 50% of the training data.More the data ,better the accuracy.
 
 ```{r}
+confusionMatrix(train_knn_3,as.factor(train.norm.df2[,7]),positive = '1')
 
-confusionMatrix(ModelNew.k.1,as.factor(valid.norm.df2[,8]),positive = '1')
-confusionMatrix(Model_new3,as.factor(test.norm.df2[,8]),positive = '1')
-
+confusionMatrix(valid_knn_3,as.factor(valid.norm.df2[,7]),positive = '1')
+confusionMatrix(test_knn_3,as.factor(test.norm.df2[,7]),positive = '1')
 
 ```
 
